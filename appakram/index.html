@@ -1,0 +1,1396 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تطبيق إدارة الفواتير والمخزون</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-9ndCyUaIbzAi2FUVXJi0CjmCapSmO7SnpJef0486qhLnuZ2cdeRhO02iuK6FUUVM" crossorigin="anonymous">
+    <!-- XLSX Library -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+    <!-- html2pdf Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: auto;
+        }
+        .required {
+            color: red;
+        }
+        #main-menu .btn {
+            margin: 5px;
+        }
+        table th, table td {
+            white-space: normal;
+            word-wrap: break-word;
+        }
+        @media print {
+            .print-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 20px;
+            }
+            .print-header img {
+                width: 100px;
+                height: auto;
+            }
+            .print-header .company-info-right {
+                text-align: right;
+                flex: 1;
+            }
+            .print-header .logo-container {
+                flex: 1;
+                text-align: center;
+            }
+            .print-header .company-info-left {
+                text-align: left;
+                flex: 1;
+            }
+            .print-header .company-name {
+                font-weight: bold;
+                font-size: 1.2em;
+            }
+            .no-print {
+                display: none;
+            }
+            th {
+                background-color: #add8e6 !important;
+                color: black !important;
+            }
+            .total-row {
+                background-color: #add8e6 !important;
+                font-weight: bold;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- الواجهة الرئيسية مع الأزرار -->
+        <div id="main-menu" class="d-flex flex-wrap justify-content-around mb-4">
+            <button class="btn btn-primary" onclick="showInvoiceForm()">إضافة فاتورة</button>
+            <button class="btn btn-primary" onclick="showReceiptForm()">إضافة سند قبض</button>
+            <button class="btn btn-primary" onclick="showInventory()">المخزون</button>
+            <button class="btn btn-primary" onclick="showSalesReport()">تقرير إجمالي المبيعات</button>
+            <button class="btn btn-primary" onclick="showLogReport()">سجل العمليات</button>
+            <button class="btn btn-primary" onclick="showTrailerReport()">تقرير المقطورات</button>
+            <button class="btn btn-primary" onclick="showMonthlyReport()">تقرير الإجمالي الشهري</button>
+            <button class="btn btn-primary" onclick="showCompanyInfoForm()">البيانات الشخصية</button>
+        </div>
+
+        <div id="invoice-form" class="d-none">
+            <h2>إضافة فاتورة</h2>
+            <form id="invoice-form-data" class="row g-3">
+                <div class="col-md-6">
+                    <label>اسم المحطة <span class="required">*</span></label>
+                    <input type="text" class="form-control" id="station-name" required>
+                </div>
+                <div class="col-md-6">
+                    <label>التاريخ (اختياري)</label>
+                    <input type="date" class="form-control" id="invoice-date">
+                </div>
+                <div class="col-md-6">
+                    <label>رقم الفاتورة <span class="required">*</span></label>
+                    <input type="number" class="form-control" id="invoice-number" required>
+                </div>
+                <div class="col-md-6">
+                    <label>رقم المقطورة</label>
+                    <input type="text" class="form-control" id="trailer-number">
+                </div>
+                <div class="col-md-6">
+                    <label>رقم الطرمبة</label>
+                    <input type="number" class="form-control" id="pump-meter">
+                </div>
+                <div class="col-md-6">
+                    <label>رقم عداد الطرمبة قبل</label>
+                    <input type="number" class="form-control" id="before-meter" oninput="calculateDischarged()">
+                </div>
+                <div class="col-md-6">
+                    <label>رقم عداد الطرمبة بعد</label>
+                    <input type="number" class="form-control" id="after-meter" oninput="calculateDischarged()">
+                </div>
+                <div class="col-md-6">
+                    <label>الكمية المفرغة</label>
+                    <input type="number" class="form-control" id="discharged-amount" readonly>
+                </div>
+                <div class="col-md-6">
+                    <label>المبلغ (مدين)</label>
+                    <input type="number" class="form-control" id="invoice-amount" readonly>
+                </div>
+                <div class="col-md-6">
+                    <label>البيان</label>
+                    <input type="text" class="form-control" id="invoice-note">
+                </div>
+            </form>
+            <button class="btn btn-success mt-3" onclick="saveInvoice()">حفظ</button>
+            <button class="btn btn-secondary mt-3" onclick="backToMain()">رجوع</button>
+        </div>
+
+        <div id="receipt-form" class="d-none">
+            <h2>إضافة سند قبض</h2>
+            <form id="receipt-form-data" class="row g-3">
+                <div class="col-md-6">
+                    <label>اسم المحطة <span class="required">*</span></label>
+                    <input type="text" class="form-control" id="receipt-station-name" required>
+                </div>
+                <div class="col-md-6">
+                    <label>التاريخ (اختياري)</label>
+                    <input type="date" class="form-control" id="receipt-date">
+                </div>
+                <div class="col-md-6">
+                    <label>المبلغ (دائن) <span class="required">*</span></label>
+                    <input type="number" class="form-control" id="receipt-amount" required>
+                </div>
+                <div class="col-md-6">
+                    <label>بيان</label>
+                    <input type="text" class="form-control" id="receipt-note">
+                </div>
+            </form>
+            <button class="btn btn-success mt-3" onclick="saveReceipt()">حفظ</button>
+            <button class="btn btn-secondary mt-3" onclick="backToMain()">رجوع</button>
+        </div>
+
+        <div id="reports" class="d-none">
+            <h2>التقارير</h2>
+            <div id="sales-report" class="report-content d-none">
+                <div class="mb-3">
+                    <input type="text" class="form-control d-inline-block w-25" id="search-station" placeholder="بحث باسم المحطة">
+                    <input type="date" class="form-control d-inline-block w-25" id="search-date">
+                    <button class="btn btn-primary" onclick="filterSalesReport()">بحث</button>
+                </div>
+                <table class="table table-bordered" id="sales-table">
+                    <thead>
+                        <tr>
+                            <th>اسم المحطة</th>
+                            <th>الكمية</th>
+                            <th>المبلغ (الرصيد)</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                    <tfoot>
+                        <tr class="total-row">
+                            <td>الإجمالي</td>
+                            <td id="total-quantity-sales"></td>
+                            <td id="total-balance-sales"></td>
+                        </tr>
+                    </tfoot>
+                </table>
+                <button class="btn btn-primary mt-3" onclick="printTable('sales-table')">طباعة</button>
+                <button class="btn btn-success mt-3" onclick="saveAsPDF('sales-table')">حفظ كـ PDF</button>
+            </div>
+            <div id="station-details" class="d-none">
+                <h3 id="station-details-title"></h3>
+                <table class="table table-bordered" id="station-details-table">
+                    <thead>
+                        <tr>
+                            <th>مبلغ الفواتير</th>
+                            <th>مبلغ سندات القبض</th>
+                            <th>الرصيد</th>
+                            <th>التاريخ</th>
+                            <th>البيان</th>
+                            <th>رقم الطرمبة</th>
+                            <th>الكمية</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                    <tfoot>
+                        <tr class="total-row">
+                            <td id="details-total-invoice"></td>
+                            <td id="details-total-receipt"></td>
+                            <td id="details-total-balance"></td>
+                            <td id="balance-note" colspan="3"></td>
+                            <td id="details-total-discharged"></td>
+                        </tr>
+                    </tfoot>
+                </table>
+                <button class="btn btn-secondary mt-3" onclick="backToSalesReport()">رجوع</button>
+                <button class="btn btn-primary mt-3" onclick="printTable('station-details-table', document.getElementById('station-details-title').textContent)">طباعة</button>
+                <button class="btn btn-success mt-3" onclick="saveAsPDF('station-details-table')">حفظ كـ PDF</button>
+            </div>
+            <div id="log-report" class="report-content d-none">
+                <div class="search-container mb-3">
+                    <input type="text" class="form-control d-inline-block w-25" id="log-search-station" placeholder="بحث باسم المحطة">
+                    <input type="date" class="form-control d-inline-block w-25" id="log-search-date-from" placeholder="من تاريخ">
+                    <input type="date" class="form-control d-inline-block w-25" id="log-search-date-to" placeholder="إلى تاريخ">
+                    <button class="btn btn-primary" onclick="filterLogReport()">بحث</button>
+                    <button class="btn btn-secondary" onclick="clearLogSearch()">إلغاء البحث</button>
+                </div>
+                <table class="table table-bordered" id="log-table">
+                    <thead>
+                        <tr>
+                            <th>مبلغ الفاتورة</th>
+                            <th>مبلغ سند القبض</th>
+                            <th>الرصيد</th>
+                            <th>التاريخ</th>
+                            <th>البيان</th>
+                            <th>اسم المحطة</th>
+                            <th>رقم الفاتورة</th>
+                            <th>رقم الطرمبة</th>
+                            <th>رقم المقطورة</th>
+                            <th>عداد قبل</th>
+                            <th>عداد بعد</th>
+                            <th>الكمية المفرغة</th>
+                            <th class="no-print">إجراءات</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                    <tfoot>
+                        <tr class="total-row">
+                            <td id="total-invoice"></td>
+                            <td id="total-receipt"></td>
+                            <td id="total-balance"></td>
+                            <td id="balance-note" colspan="2"></td>
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                            <td id="total-discharged"></td>
+                            <td class="no-print"></td>
+                        </tr>
+                    </tfoot>
+                </table>
+                <button class="btn btn-primary mt-3" onclick="printTable('log-table')">طباعة</button>
+                <button class="btn btn-success mt-3" onclick="exportToExcel('log-table')">تصدير إلى Excel</button>
+                <input type="file" id="import-excel" accept=".xlsx, .xls" style="display: none;" onchange="importFromExcel(event)">
+                <button class="btn btn-info mt-3" onclick="document.getElementById('import-excel').click()">استيراد من Excel</button>
+            </div>
+            <div id="trailer-report" class="report-content d-none">
+                <h3>تقرير المقطورات</h3>
+                <div class="search-container mb-3">
+                    <input type="date" class="form-control d-inline-block w-25" id="trailer-search-date-from" placeholder="من تاريخ">
+                    <input type="date" class="form-control d-inline-block w-25" id="trailer-search-date-to" placeholder="إلى تاريخ">
+                    <button class="btn btn-primary" onclick="filterTrailerReport()">بحث</button>
+                    <button class="btn btn-secondary" onclick="clearTrailerSearch()">إلغاء البحث</button>
+                </div>
+                <table class="table table-bordered" id="trailer-table">
+                    <thead>
+                        <tr>
+                            <th>رقم المقطورة</th>
+                            <th>التاريخ</th>
+                            <th>الكمية المفرغة</th>
+                            <th>الكمية الموردة</th>
+                            <th>الفارق</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                    <tfoot>
+                        <tr class="total-row">
+                            <td>الإجمالي</td>
+                            <td></td>
+                            <td id="total-discharged-trailer"></td>
+                            <td id="total-supplied"></td>
+                            <td id="total-difference"></td>
+                        </tr>
+                    </tfoot>
+                </table>
+                <button class="btn btn-primary mt-3" onclick="printTable('trailer-table')">طباعة</button>
+                <button class="btn btn-success mt-3" onclick="saveAsPDF('trailer-table')">حفظ كـ PDF</button>
+                <button class="btn btn-secondary mt-3" onclick="backToReports()">رجوع</button>
+            </div>
+            <div id="trailer-details" class="d-none">
+                <h3>تفاصيل المقطورة</h3>
+                <table class="table table-bordered" id="trailer-details-table">
+                    <thead>
+                        <tr>
+                            <th>رقم المقطورة</th>
+                            <th>اسم المحطة</th>
+                            <th>التاريخ</th>
+                            <th>الكمية المفرغة</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                    <tfoot>
+                        <tr class="total-row">
+                            <td colspan="3">الإجمالي</td>
+                            <td id="details-total-discharged"></td>
+                        </tr>
+                    </tfoot>
+                </table>
+                <button class="btn btn-secondary mt-3" onclick="backToTrailerReport()">رجوع</button>
+                <button class="btn btn-primary mt-3" onclick="printTable('trailer-details-table')">طباعة</button>
+                <button class="btn btn-success mt-3" onclick="saveAsPDF('trailer-details-table')">حفظ كـ PDF</button>
+            </div>
+            <div id="monthly-report" class="report-content d-none">
+                <h3>تقرير الإجمالي الشهري</h3>
+                <table class="table table-bordered" id="monthly-table">
+                    <thead>
+                        <tr>
+                            <th>الشهر</th>
+                            <th>إجمالي الكمية المباعة</th>
+                            <th>إجمالي الكمية الموردة</th>
+                            <th>الكمية المتبقية نهاية</th>
+                            <th>إجمالي الربح</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                    <tfoot>
+                        <tr class="total-row">
+                            <td>الإجمالي</td>
+                            <td id="total-monthly-sold"></td>
+                            <td id="total-monthly-supplied"></td>
+                            <td id="total-monthly-remaining"></td>
+                            <td id="total-monthly-profit"></td>
+                        </tr>
+                    </tfoot>
+                </table>
+                <button class="btn btn-primary mt-3" onclick="printTable('monthly-table')">طباعة</button>
+                <button class="btn btn-success mt-3" onclick="saveAsPDF('monthly-table')">حفظ كـ PDF</button>
+            </div>
+            <button class="btn btn-secondary mt-3" onclick="backToMain()">رجوع</button>
+        </div>
+
+        <div id="inventory" class="d-none">
+            <h2>المخزون</h2>
+            <div class="inventory-tabs d-flex gap-3 mb-4">
+                <button class="btn btn-outline-primary" onclick="showAddInventory()">إضافة مخزون</button>
+                <button class="btn btn-outline-primary" onclick="showInventoryLog()">سجل المخزون</button>
+            </div>
+            <div id="add-inventory" class="inventory-content d-none">
+                <h3>إضافة مخزون</h3>
+                <form id="inventory-form" class="row g-3">
+                    <div class="col-md-6">
+                        <label>اسم الصنف <span class="required">*</span></label>
+                        <input type="text" class="form-control" id="inventory-item" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label>التاريخ (اختياري)</label>
+                        <input type="date" class="form-control" id="inventory-date">
+                    </div>
+                    <div class="col-md-6">
+                        <label>الكمية <span class="required">*</span></label>
+                        <input type="number" class="form-control" id="inventory-quantity" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label>البيان</label>
+                        <input type="text" class="form-control" id="inventory-note">
+                    </div>
+                    <div class="col-md-6">
+                        <label>سعر التكلفة <span class="required">*</span></label>
+                        <input type="number" class="form-control" id="inventory-cost" required oninput="calculateTotalCost()">
+                    </div>
+                    <div class="col-md-6">
+                        <label>التكلفة الإجمالية</label>
+                        <input type="number" class="form-control" id="inventory-total-cost" readonly>
+                    </div>
+                </form>
+                <button class="btn btn-success mt-3" onclick="saveInventory()">حفظ</button>
+                <button class="btn btn-secondary mt-3" onclick="backToInventory()">رجوع</button>
+            </div>
+            <div id="inventory-log" class="inventory-content d-none">
+                <h3>سجل المخزون</h3>
+                <div class="search-container mb-3">
+                    <input type="date" class="form-control d-inline-block w-25" id="inventory-search-date-from" placeholder="من تاريخ">
+                    <input type="date" class="form-control d-inline-block w-25" id="inventory-search-date-to" placeholder="إلى تاريخ">
+                    <button class="btn btn-primary" onclick="filterInventoryLog()">بحث</button>
+                    <button class="btn btn-secondary" onclick="clearInventorySearch()">إلغاء البحث</button>
+                </div>
+                <table class="table table-bordered" id="inventory-table">
+                    <thead>
+                        <tr>
+                            <th>م</th>
+                            <th>اسم الصنف</th>
+                            <th>التاريخ</th>
+                            <th>الكمية</th>
+                            <th>البيان</th>
+                            <th>سعر التكلفة</th>
+                            <th>التكلفة الإجمالية</th>
+                            <th class="no-print">حذف</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                    <tfoot>
+                        <tr class="total-row">
+                            <td></td>
+                            <td>الإجمالي</td>
+                            <td></td>
+                            <td id="total-quantity"></td>
+                            <td></td>
+                            <td></td>
+                            <td id="total-cost"></td>
+                            <td class="no-print"></td>
+                        </tr>
+                    </tfoot>
+                </table>
+                <button class="btn btn-primary mt-3" onclick="printTable('inventory-table')">طباعة</button>
+                <button class="btn btn-success mt-3" onclick="saveAsPDF('inventory-table')">حفظ كـ PDF</button>
+                <button class="btn btn-info mt-3" onclick="document.getElementById('import-inventory-excel').click()">استيراد من Excel</button>
+                <input type="file" id="import-inventory-excel" accept=".xlsx, .xls" style="display: none;" onchange="importInventoryFromExcel(event)">
+                <button class="btn btn-secondary mt-3" onclick="backToInventory()">رجوع</button>
+            </div>
+            <button class="btn btn-secondary mt-3" onclick="backToMain()">رجوع إلى القائمة الرئيسية</button>
+        </div>
+
+        <div id="company-info-form" class="d-none">
+            <h2>بيانات الشركة</h2>
+            <form id="company-form" class="row g-3">
+                <div class="col-md-6">
+                    <label>اسم الشركة (عربي)</label>
+                    <input type="text" class="form-control" id="company-name">
+                </div>
+                <div class="col-md-6">
+                    <label>اسم الشركة (إنجليزي)</label>
+                    <input type="text" class="form-control" id="company-name-en">
+                </div>
+                <div class="col-md-6">
+                    <label>العنوان (عربي)</label>
+                    <input type="text" class="form-control" id="company-address">
+                </div>
+                <div class="col-md-6">
+                    <label>العنوان (إنجليزي)</label>
+                    <input type="text" class="form-control" id="company-address-en">
+                </div>
+                <div class="col-md-6">
+                    <label>رقم الهاتف (عربي)</label>
+                    <input type="text" class="form-control" id="company-phone">
+                </div>
+                <div class="col-md-6">
+                    <label>رقم الهاتف (إنجليزي)</label>
+                    <input type="text" class="form-control" id="company-phone-en">
+                </div>
+                <div class="col-md-6">
+                    <label>الشعار</label>
+                    <input type="file" class="form-control" id="company-logo" accept="image/*">
+                </div>
+            </form>
+            <button class="btn btn-success mt-3" onclick="saveCompanyInfo()">حفظ</button>
+            <button class="btn btn-secondary mt-3" onclick="backToMain()">رجوع</button>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" integrity="sha384-geWF76RCwLtnZ8qwWowPQNguL3RmwHVBC9FhGdlKrxdiJJigb/j/68SIy3Te4Bkz" crossorigin="anonymous"></script>
+    <script>
+        let invoices = [];
+        let receipts = [];
+        let inventoryRecords = [];
+        let lastInvoiceNumber = 0;
+        let lastMeter = 0;
+        let companyInfo = {
+            name: '',
+            address: '',
+            phone: '',
+            nameEn: '',
+            addressEn: '',
+            phoneEn: '',
+            logo: ''
+        };
+
+        // Load data from localStorage on startup
+        function loadData() {
+            invoices = JSON.parse(localStorage.getItem('invoices')) || [];
+            receipts = JSON.parse(localStorage.getItem('receipts')) || [];
+            inventoryRecords = JSON.parse(localStorage.getItem('inventoryRecords')) || [];
+            companyInfo = JSON.parse(localStorage.getItem('companyInfo')) || companyInfo;
+            lastInvoiceNumber = parseInt(localStorage.getItem('lastInvoiceNumber')) || 0;
+            lastMeter = parseInt(localStorage.getItem('lastMeter')) || 0;
+
+            invoices = invoices.map(i => ({ ...i, date: i.date ? new Date(i.date) : null }));
+            receipts = receipts.map(r => ({ ...r, date: r.date ? new Date(r.date) : null }));
+            inventoryRecords = inventoryRecords.map(ir => ({ ...ir, date: ir.date ? new Date(ir.date) : null }));
+        }
+
+        // Save data to localStorage
+        function saveData() {
+            localStorage.setItem('invoices', JSON.stringify(invoices));
+            localStorage.setItem('receipts', JSON.stringify(receipts));
+            localStorage.setItem('inventoryRecords', JSON.stringify(inventoryRecords));
+            localStorage.setItem('companyInfo', JSON.stringify(companyInfo));
+            localStorage.setItem('lastInvoiceNumber', lastInvoiceNumber);
+            localStorage.setItem('lastMeter', lastMeter);
+        }
+
+        window.onload = function() {
+            loadData();
+            window.history.replaceState({ page: 'main' }, '', '');
+        };
+
+        window.addEventListener('popstate', function(event) {
+            const state = event.state;
+            if (state && state.page === 'main') backToMain();
+            else if (state && state.page === 'reports') backToReports();
+            else if (state && state.page === 'inventory') backToInventory();
+            else backToMain();
+        });
+
+        function parseDate(dateStr) {
+            if (!dateStr || typeof dateStr !== 'string') return null;
+            const parts = dateStr.split('/');
+            if (parts.length !== 3) return null;
+            const day = parseInt(parts[0], 10);
+            const month = parseInt(parts[1], 10) - 1;
+            const year = parseInt(parts[2], 10);
+            const date = new Date(year, month, day);
+            if (date.getDate() !== day || date.getMonth() !== month || date.getFullYear() !== year) return null;
+            return date;
+        }
+
+        function excelSerialToDate(serial) {
+            if (typeof serial !== 'number' || isNaN(serial)) return null;
+            const utcDays = Math.floor(serial - 25569);
+            const date = new Date(utcDays * 86400 * 1000);
+            if (serial >= 60) date.setDate(date.getDate() + 1);
+            return date;
+        }
+
+        function formatDate(date) {
+            if (!date) return '-';
+            const day = String(date.getDate()).padStart(2, '0');
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const year = date.getFullYear();
+            return `${day}/${month}/${year}`;
+        }
+
+        function formatNumber(number) {
+            return number.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        }
+
+        function showInvoiceForm() {
+            document.getElementById('main-menu').classList.add('d-none');
+            document.getElementById('invoice-form').classList.remove('d-none');
+            document.getElementById('invoice-date').value = '';
+            document.getElementById('invoice-number').value = lastInvoiceNumber + 1;
+            document.getElementById('before-meter').value = lastMeter;
+            window.history.pushState({ page: 'invoice-form' }, '', '');
+        }
+
+        function showReceiptForm() {
+            document.getElementById('main-menu').classList.add('d-none');
+            document.getElementById('receipt-form').classList.remove('d-none');
+            document.getElementById('receipt-date').value = '';
+            window.history.pushState({ page: 'receipt-form' }, '', '');
+        }
+
+        function showInventory() {
+            document.getElementById('main-menu').classList.add('d-none');
+            document.getElementById('inventory').classList.remove('d-none');
+            showAddInventory();
+            window.history.pushState({ page: 'inventory' }, '', '');
+        }
+
+        function showSalesReport() {
+            document.getElementById('main-menu').classList.add('d-none');
+            document.getElementById('reports').classList.remove('d-none');
+            document.getElementById('sales-report').classList.remove('d-none');
+            document.getElementById('log-report').classList.add('d-none');
+            document.getElementById('trailer-report').classList.add('d-none');
+            document.getElementById('trailer-details').classList.add('d-none');
+            document.getElementById('monthly-report').classList.add('d-none');
+            document.getElementById('station-details').classList.add('d-none');
+            updateSalesTable();
+            window.history.pushState({ page: 'reports' }, '', '');
+        }
+
+        function showLogReport() {
+            document.getElementById('main-menu').classList.add('d-none');
+            document.getElementById('reports').classList.remove('d-none');
+            document.getElementById('sales-report').classList.add('d-none');
+            document.getElementById('log-report').classList.remove('d-none');
+            document.getElementById('trailer-report').classList.add('d-none');
+            document.getElementById('trailer-details').classList.add('d-none');
+            document.getElementById('monthly-report').classList.add('d-none');
+            updateLogTable();
+            window.history.pushState({ page: 'reports' }, '', '');
+        }
+
+        function showTrailerReport() {
+            document.getElementById('main-menu').classList.add('d-none');
+            document.getElementById('reports').classList.remove('d-none');
+            document.getElementById('sales-report').classList.add('d-none');
+            document.getElementById('log-report').classList.add('d-none');
+            document.getElementById('trailer-report').classList.remove('d-none');
+            document.getElementById('trailer-details').classList.add('d-none');
+            document.getElementById('monthly-report').classList.add('d-none');
+            updateTrailerTable();
+            window.history.pushState({ page: 'reports' }, '', '');
+        }
+
+        function showMonthlyReport() {
+            document.getElementById('main-menu').classList.add('d-none');
+            document.getElementById('reports').classList.remove('d-none');
+            document.getElementById('sales-report').classList.add('d-none');
+            document.getElementById('log-report').classList.add('d-none');
+            document.getElementById('trailer-report').classList.add('d-none');
+            document.getElementById('trailer-details').classList.add('d-none');
+            document.getElementById('monthly-report').classList.remove('d-none');
+            updateMonthlyTable();
+            window.history.pushState({ page: 'reports' }, '', '');
+        }
+
+        function showCompanyInfoForm() {
+            document.getElementById('main-menu').classList.add('d-none');
+            document.getElementById('company-info-form').classList.remove('d-none');
+            document.getElementById('company-name').value = companyInfo.name || '';
+            document.getElementById('company-address').value = companyInfo.address || '';
+            document.getElementById('company-phone').value = companyInfo.phone || '';
+            document.getElementById('company-name-en').value = companyInfo.nameEn || '';
+            document.getElementById('company-address-en').value = companyInfo.addressEn || '';
+            document.getElementById('company-phone-en').value = companyInfo.phoneEn || '';
+            window.history.pushState({ page: 'company-info-form' }, '', '');
+        }
+
+        function backToMain() {
+            document.querySelectorAll('.container > div').forEach(el => el.classList.add('d-none'));
+            document.getElementById('main-menu').classList.remove('d-none');
+            window.history.pushState({ page: 'main' }, '', '');
+        }
+
+        function calculateDischarged() {
+            const before = parseFloat(document.getElementById('before-meter').value) || 0;
+            const after = parseFloat(document.getElementById('after-meter').value) || 0;
+            const discharged = after - before;
+            const amount = discharged > 0 ? discharged * 315 : 0;
+            document.getElementById('discharged-amount').value = discharged > 0 ? discharged : 0;
+            document.getElementById('invoice-amount').value = amount;
+        }
+
+        function calculateTotalCost() {
+            const quantity = parseFloat(document.getElementById('inventory-quantity').value) || 0;
+            const cost = parseFloat(document.getElementById('inventory-cost').value) || 0;
+            document.getElementById('inventory-total-cost').value = quantity * cost;
+        }
+
+        function saveInvoice() {
+            const date = document.getElementById('invoice-date').valueAsDate;
+            const invoice = {
+                id: Date.now(),
+                type: 'فاتورة',
+                station: document.getElementById('station-name').value,
+                date: date,
+                number: parseInt(document.getElementById('invoice-number').value),
+                trailer: document.getElementById('trailer-number').value,
+                pump: document.getElementById('pump-meter').value,
+                before: parseFloat(document.getElementById('before-meter').value) || 0,
+                after: parseFloat(document.getElementById('after-meter').value) || 0,
+                discharged: parseFloat(document.getElementById('discharged-amount').value) || 0,
+                amount: parseFloat(document.getElementById('invoice-amount').value) || 0,
+                note: document.getElementById('invoice-note').value
+            };
+            if (!invoice.station || !invoice.number) {
+                alert('يرجى إدخال الحقول الإجبارية');
+                return;
+            }
+            invoices.push(invoice);
+            lastInvoiceNumber = invoice.number;
+            lastMeter = invoice.after;
+            document.getElementById('invoice-form-data').reset();
+            document.getElementById('invoice-date').value = '';
+            document.getElementById('invoice-number').value = lastInvoiceNumber + 1;
+            document.getElementById('before-meter').value = lastMeter;
+            document.getElementById('trailer-number').value = invoice.trailer;
+            document.getElementById('invoice-note').value = invoice.note;
+            saveData();
+            updateLogTable();
+            updateSalesTable();
+            updateTrailerTable();
+            updateMonthlyTable();
+            alert('تم حفظ الفاتورة');
+        }
+
+        function saveReceipt() {
+            const date = document.getElementById('receipt-date').valueAsDate;
+            const receipt = {
+                id: Date.now(),
+                type: 'سند قبض',
+                station: document.getElementById('receipt-station-name').value,
+                date: date,
+                amount: parseFloat(document.getElementById('receipt-amount').value) || 0,
+                note: document.getElementById('receipt-note').value,
+                discharged: 0,
+                pump: '',
+                trailer: '',
+                before: 0,
+                after: 0,
+                number: '-'
+            };
+            if (!receipt.station || !receipt.amount) {
+                alert('يرجى إدخال الحقول الإجبارية');
+                return;
+            }
+            receipts.push(receipt);
+            document.getElementById('receipt-form-data').reset();
+            document.getElementById('receipt-date').value = '';
+            saveData();
+            updateLogTable();
+            updateSalesTable();
+            updateMonthlyTable();
+            alert('تم حفظ سند القبض');
+        }
+
+        function saveCompanyInfo() {
+            companyInfo.name = document.getElementById('company-name').value;
+            companyInfo.address = document.getElementById('company-address').value;
+            companyInfo.phone = document.getElementById('company-phone').value;
+            companyInfo.nameEn = document.getElementById('company-name-en').value;
+            companyInfo.addressEn = document.getElementById('company-address-en').value;
+            companyInfo.phoneEn = document.getElementById('company-phone-en').value;
+            const logoFile = document.getElementById('company-logo').files[0];
+            if (logoFile) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    companyInfo.logo = e.target.result;
+                    saveData();
+                    alert('تم حفظ بيانات الشركة');
+                    backToMain();
+                };
+                reader.readAsDataURL(logoFile);
+            } else {
+                saveData();
+                alert('تم حفظ بيانات الشركة');
+                backToMain();
+            }
+        }
+
+        function saveInventory() {
+            const date = document.getElementById('inventory-date').valueAsDate;
+            const item = String(document.getElementById('inventory-item').value).trim();
+            const quantity = parseFloat(document.getElementById('inventory-quantity').value) || 0;
+            const note = document.getElementById('inventory-note').value;
+            const cost = parseFloat(document.getElementById('inventory-cost').value) || 0;
+            const totalCost = parseFloat(document.getElementById('inventory-total-cost').value) || 0;
+            if (!item || !quantity || !cost) {
+                alert('يرجى إدخال الحقول الإجبارية');
+                return;
+            }
+            inventoryRecords.push({ item, date, quantity, note, cost, totalCost });
+            document.getElementById('inventory-form').reset();
+            document.getElementById('inventory-date').value = '';
+            saveData();
+            updateInventoryTable();
+            updateTrailerTable();
+            updateMonthlyTable();
+            alert('تم حفظ بيانات المخزون');
+        }
+
+        function updateSalesTable(filterStation = '', filterDate = '') {
+            const tableBody = document.getElementById('sales-table').querySelector('tbody');
+            tableBody.innerHTML = '';
+            const stations = [...new Set(invoices.map(i => i.station))];
+            let totalQuantityAll = 0;
+            let totalBalanceAll = 0;
+            stations.forEach(station => {
+                const stationInvoices = invoices.filter(i => i.station === station && (!filterStation || i.station.includes(filterStation)) && (!filterDate || (i.date && formatDate(i.date) === filterDate)));
+                const stationReceipts = receipts.filter(r => r.station === station && (!filterStation || r.station.includes(filterStation)) && (!filterDate || (r.date && formatDate(r.date) === filterDate)));
+                const totalDischarged = stationInvoices.reduce((sum, i) => sum + i.discharged, 0);
+                const totalAmount = stationInvoices.reduce((sum, i) => sum + i.amount, 0) - stationReceipts.reduce((sum, r) => sum + r.amount, 0);
+                if (totalDischarged > 0 || totalAmount !== 0) {
+                    const row = `<tr style="cursor: pointer;" onclick="showStationDetails('${station}')"><td>${station}</td><td>${formatNumber(totalDischarged)}</td><td>${formatNumber(totalAmount)}</td></tr>`;
+                    tableBody.innerHTML += row;
+                    totalQuantityAll += totalDischarged;
+                    totalBalanceAll += totalAmount;
+                }
+            });
+            document.getElementById('total-quantity-sales').textContent = formatNumber(totalQuantityAll);
+            document.getElementById('total-balance-sales').textContent = formatNumber(totalBalanceAll);
+        }
+
+        function showStationDetails(station) {
+            document.getElementById('sales-report').classList.add('d-none');
+            document.getElementById('station-details').classList.remove('d-none');
+            document.getElementById('station-details-title').textContent = `تفاصيل المحطة: ${station}`;
+            const tableBody = document.getElementById('station-details-table').querySelector('tbody');
+            tableBody.innerHTML = '';
+            const stationRecords = [...invoices.filter(i => i.station === station), ...receipts.filter(r => r.station === station)].sort((a, b) => {
+                const dateA = a.date ? new Date(a.date) : new Date(0);
+                const dateB = b.date ? new Date(b.date) : new Date(0);
+                return dateA - dateB;
+            });
+            let balance = 0;
+            let totalInvoice = 0;
+            let totalReceipt = 0;
+            let totalDischarged = 0;
+            stationRecords.forEach(record => {
+                const invoiceAmount = record.type === 'فاتورة' ? record.amount || 0 : 0;
+                const receiptAmount = record.type === 'سند قبض' ? record.amount || 0 : 0;
+                balance += invoiceAmount - receiptAmount;
+                totalInvoice += invoiceAmount;
+                totalReceipt += receiptAmount;
+                totalDischarged += record.discharged || 0;
+                const dateStr = record.date ? formatDate(record.date) : '-';
+                const row = `
+                    <tr>
+                        <td>${formatNumber(invoiceAmount) || '-'}</td>
+                        <td>${formatNumber(receiptAmount) || '-'}</td>
+                        <td>${formatNumber(balance)}</td>
+                        <td>${dateStr}</td>
+                        <td>${record.note || '-'}</td>
+                        <td>${record.pump || '-'}</td>
+                        <td>${formatNumber(record.discharged) || '-'}</td>
+                    </tr>`;
+                tableBody.innerHTML += row;
+            });
+            document.getElementById('details-total-invoice').textContent = formatNumber(totalInvoice);
+            document.getElementById('details-total-receipt').textContent = formatNumber(totalReceipt);
+            document.getElementById('details-total-balance').textContent = formatNumber(balance);
+            document.getElementById('balance-note').textContent = balance > 0 ? 'إجمالي الرصيد عليكم' : balance < 0 ? 'إجمالي الرصيد لكم' : 'الرصيد صفر';
+            document.getElementById('details-total-discharged').textContent = formatNumber(totalDischarged);
+        }
+
+        function backToSalesReport() {
+            document.getElementById('station-details').classList.add('d-none');
+            document.getElementById('sales-report').classList.remove('d-none');
+        }
+
+        function updateLogTable(filterStation = '', filterDateFrom = '', filterDateTo = '') {
+            const tableBody = document.getElementById('log-table').querySelector('tbody');
+            const allRecords = [...invoices, ...receipts].sort((a, b) => {
+                const dateA = a.date ? new Date(a.date) : new Date(0);
+                const dateB = b.date ? new Date(b.date) : new Date(0);
+                return dateA - dateB;
+            });
+            let balance = 0;
+            let totalInvoice = 0;
+            let totalReceipt = 0;
+            let totalDischarged = 0;
+            let rows = '';
+            allRecords.forEach(record => {
+                const recordDate = record.date ? new Date(record.date) : null;
+                const startDate = filterDateFrom ? new Date(filterDateFrom) : null;
+                const endDate = filterDateTo ? new Date(filterDateTo + 'T23:59:59') : null;
+
+                // تطبيق الفلتر بدقة
+                if (filterStation && !record.station.includes(filterStation)) return;
+                if (startDate && recordDate && recordDate < startDate) return;
+                if (endDate && recordDate && recordDate > endDate) return;
+
+                const invoiceNumber = record.type === 'فاتورة' ? (record.number || '-') : '-';
+                const invoiceAmount = record.type === 'فاتورة' ? record.amount || 0 : 0;
+                const receiptAmount = record.type === 'سند قبض' ? record.amount || 0 : 0;
+                balance += invoiceAmount - receiptAmount;
+                totalInvoice += invoiceAmount;
+                totalReceipt += receiptAmount;
+                totalDischarged += record.discharged || 0;
+                const dateStr = record.date ? formatDate(record.date) : '-';
+                rows += `
+                    <tr>
+                        <td>${formatNumber(invoiceAmount) || '-'}</td>
+                        <td>${formatNumber(receiptAmount) || '-'}</td>
+                        <td>${formatNumber(balance)}</td>
+                        <td>${dateStr}</td>
+                        <td>${record.note || '-'}</td>
+                        <td>${record.station || '-'}</td>
+                        <td>${invoiceNumber}</td>
+                        <td>${record.pump || '-'}</td>
+                        <td>${record.trailer || '-'}</td>
+                        <td>${formatNumber(record.before) || '-'}</td>
+                        <td>${formatNumber(record.after) || '-'}</td>
+                        <td>${formatNumber(record.discharged) || '-'}</td>
+                        <td class="no-print"><button class="btn btn-danger btn-sm" onclick="deleteRow(${record.id}, '${record.type}')">حذف</button></td>
+                    </tr>`;
+            });
+            tableBody.innerHTML = rows;
+            const balanceNote = balance > 0 ? 'إجمالي الرصيد عليكم' : balance < 0 ? 'إجمالي الرصيد لكم' : 'الرصيد صفر';
+            document.getElementById('total-invoice').textContent = formatNumber(totalInvoice);
+            document.getElementById('total-receipt').textContent = formatNumber(totalReceipt);
+            document.getElementById('total-balance').textContent = `الإجمالي: ${formatNumber(balance)}`;
+            document.getElementById('balance-note').textContent = balanceNote;
+            document.getElementById('total-discharged').textContent = formatNumber(totalDischarged);
+        }
+
+        function deleteRow(id, type) {
+            if (confirm('هل أنت متأكد من حذف هذا السجل؟')) {
+                if (type === 'فاتورة') {
+                    const index = invoices.findIndex(i => i.id === id);
+                    if (index !== -1) invoices.splice(index, 1);
+                } else {
+                    const index = receipts.findIndex(r => r.id === id);
+                    if (index !== -1) receipts.splice(index, 1);
+                }
+                saveData();
+                updateLogTable();
+                updateSalesTable();
+                updateTrailerTable();
+                updateMonthlyTable();
+                alert('تم حذف السجل');
+            }
+        }
+
+        function deleteInventoryRecord(index) {
+            if (confirm('هل أنت متأكد من حذف هذا السجل؟')) {
+                inventoryRecords.splice(index, 1);
+                saveData();
+                updateInventoryTable();
+                updateTrailerTable();
+                updateMonthlyTable();
+                alert('تم حذف السجل بنجاح');
+            }
+        }
+
+        function dateToExcelSerial(date) {
+            if (!date) return '';
+            const baseDate = new Date(1899, 11, 30); // Excel base date
+            const diff = date - baseDate;
+            const serial = Math.floor(diff / (1000 * 60 * 60 * 24)) + 1;
+            return serial;
+        }
+
+        function exportToExcel(tableId) {
+            if (navigator.userAgent.includes('Android') && window.location.href.includes('appsgeyser')) {
+                alert('تصدير Excel غير مدعوم في تطبيق الأندرويد حاليًا. يرجى استخدام المتصفح على جهاز الكمبيوتر.');
+                return;
+            }
+
+            // الحصول على قيم الفلتر من واجهة المستخدم
+            const filterStation = document.getElementById('log-search-station').value;
+            const filterDateFrom = document.getElementById('log-search-date-from').value;
+            const filterDateTo = document.getElementById('log-search-date-to').value;
+
+            // إعداد البيانات المصفاة
+            const allRecords = [...invoices, ...receipts].sort((a, b) => {
+                const dateA = a.date ? new Date(a.date) : new Date(0);
+                const dateB = b.date ? new Date(b.date) : new Date(0);
+                return dateA - dateB;
+            });
+
+            const headers = [
+                'مبلغ الفاتورة', 'مبلغ سند القبض', 'الرصيد', 'التاريخ', 'البيان', 'اسم المحطة',
+                'رقم الفاتورة', 'رقم الطرمبة', 'رقم المقطورة', 'عداد قبل', 'عداد بعد', 'الكمية المفرغة'
+            ];
+            const data = [headers];
+
+            let balance = 0;
+            let totalInvoice = 0;
+            let totalReceipt = 0;
+            let totalDischarged = 0;
+
+            allRecords.forEach(record => {
+                const recordDate = record.date ? new Date(record.date) : null;
+                const startDate = filterDateFrom ? new Date(filterDateFrom) : null;
+                const endDate = filterDateTo ? new Date(filterDateTo + 'T23:59:59') : null;
+
+                if (filterStation && !record.station.includes(filterStation)) return;
+                if (startDate && recordDate && recordDate < startDate) return;
+                if (endDate && recordDate && recordDate > endDate) return;
+
+                const invoiceNumber = record.type === 'فاتورة' ? (record.number || '-') : '-';
+                const invoiceAmount = record.type === 'فاتورة' ? record.amount || 0 : 0;
+                const receiptAmount = record.type === 'سند قبض' ? record.amount || 0 : 0;
+                balance += invoiceAmount - receiptAmount;
+                totalInvoice += invoiceAmount;
+                totalReceipt += receiptAmount;
+                totalDischarged += record.discharged || 0;
+
+                const row = [
+                    invoiceAmount || '',
+                    receiptAmount || '',
+                    balance,
+                    record.date ? dateToExcelSerial(record.date) : '',
+                    record.note || '',
+                    record.station || '',
+                    invoiceNumber,
+                    record.pump || '',
+                    record.trailer || '',
+                    record.before || '',
+                    record.after || '',
+                    record.discharged || ''
+                ];
+                data.push(row);
+            });
+
+            // إضافة صف الإجماليات
+            const totalRow = [
+                totalInvoice, totalReceipt, balance, '', 'الإجمالي', '', '', '', '', '', '', totalDischarged
+            ];
+            data.push(totalRow);
+
+            // إنشاء ملف Excel
+            const wb = XLSX.utils.book_new();
+            const ws = XLSX.utils.aoa_to_sheet(data);
+            ws['!cols'] = headers.map(() => ({ wch: 15 }));
+            XLSX.utils.book_append_sheet(wb, ws, "سجل العمليات");
+
+            // تنسيق العمود الخاص بالتاريخ (العمود الرابع)
+            for (let i = 1; i < data.length; i++) {
+                const cellRef = XLSX.utils.encode_cell({ c: 3, r: i });
+                if (data[i][3]) {
+                    ws[cellRef].z = 'dd/mm/yyyy';
+                }
+            }
+
+            XLSX.writeFile(wb, 'سجل_العمليات.xlsx');
+        }
+
+        function importFromExcel(event) {
+            const file = event.target.files[0];
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const sheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[sheetName];
+                const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                invoices = [];
+                receipts = [];
+                json.slice(1).forEach(row => {
+                    const invoiceAmount = parseFloat(row[0]) || 0;
+                    const receiptAmount = parseFloat(row[1]) || 0;
+                    const type = invoiceAmount > 0 ? 'فاتورة' : receiptAmount > 0 ? 'سند قبض' : null;
+                    if (!type) return;
+                    const date = row[3] ? (typeof row[3] === 'number' ? excelSerialToDate(row[3]) : parseDate(String(row[3]))) : null;
+                    const record = {
+                        id: Date.now() + Math.random(),
+                        type: type,
+                        amount: type === 'فاتورة' ? invoiceAmount : receiptAmount,
+                        station: String(row[5] || ''),
+                        date: date,
+                        note: String(row[4] || ''),
+                        number: type === 'فاتورة' ? (parseInt(row[6]) || '-') : '-',
+                        pump: String(row[7] || ''),
+                        trailer: String(row[8] || ''),
+                        before: parseFloat(row[9]) || 0,
+                        after: parseFloat(row[10]) || 0,
+                        discharged: parseFloat(row[11]) || 0
+                    };
+                    if (type === 'فاتورة') {
+                        if (!record.amount && record.discharged > 0) record.amount = record.discharged * 315;
+                        invoices.push(record);
+                    } else {
+                        receipts.push(record);
+                    }
+                });
+                saveData();
+                updateLogTable();
+                updateSalesTable();
+                updateTrailerTable();
+                updateMonthlyTable();
+                alert('تم استيراد البيانات بنجاح');
+            };
+            reader.readAsArrayBuffer(file);
+            document.getElementById('import-excel').value = '';
+        }
+
+        function importInventoryFromExcel(event) {
+            const file = event.target.files[0];
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const sheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[sheetName];
+                const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                json.slice(1).forEach(row => {
+                    let date = null;
+                    if (row[2]) {
+                        date = typeof row[2] === 'number' ? excelSerialToDate(row[2]) : parseDate(String(row[2]));
+                    }
+                    const record = {
+                        item: String(row[1] || '').trim(),
+                        date: date || null,
+                        quantity: parseFloat(row[3]) || 0,
+                        note: row[4] || '',
+                        cost: parseFloat(row[5]) || 0,
+                        totalCost: parseFloat(row[6]) || 0
+                    };
+                    inventoryRecords.push(record);
+                });
+                saveData();
+                updateInventoryTable();
+                updateTrailerTable();
+                updateMonthlyTable();
+                alert('تم استيراد البيانات بنجاح');
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function printTable(tableId, title = '') {
+            if (navigator.userAgent.includes('Android') && window.location.href.includes('appsgeyser')) {
+                alert('الطباعة غير مدعومة بشكل كامل في تطبيق الأندرويد. يرجى استخدام المتصفح على جهاز الكمبيوتر للحصول على أفضل نتيجة.');
+            }
+            const table = document.getElementById(tableId).cloneNode(true);
+            table.querySelectorAll('.no-print').forEach(cell => cell.remove());
+            const companyHeader = `
+                <div class="print-header">
+                    <div class="company-info-right">
+                        <div class="company-name">${companyInfo.name || 'اسم الشركة'}</div>
+                        <div>${companyInfo.address || 'العنوان'}</div>
+                        <div>${companyInfo.phone || 'رقم الهاتف'}</div>
+                    </div>
+                    <div class="logo-container">
+                        ${companyInfo.logo ? `<img src="${companyInfo.logo}" alt="شعار الشركة" style="width: 100px; height: auto;">` : 'شعار الشركة'}
+                    </div>
+                    <div class="company-info-left">
+                        <div class="company-name">${companyInfo.nameEn || 'Company Name'}</div>
+                        <div>${companyInfo.addressEn || 'Address'}</div>
+                        <div>${companyInfo.phoneEn || 'Phone Number'}</div>
+                    </div>
+                </div>
+                <h3 style="text-align: center; margin-bottom: 20px;">${title || 'تقرير'}</h3>
+            `;
+            const win = window.open('', '', 'width=800,height=600');
+            win.document.write(`
+                <html>
+                    <head>
+                        <style>
+                            body { direction: rtl; font-family: Arial, sans-serif; }
+                            table { width: 100%; border-collapse: collapse; }
+                            th, td { border: 1px solid #ddd; padding: 10px; text-align: center; }
+                            th { background-color: #add8e6; color: black; }
+                            .total-row { background-color: #add8e6; font-weight: bold; }
+                            .print-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+                            .company-info-right { text-align: right; flex: 1; }
+                            .logo-container { flex: 1; text-align: center; }
+                            .company-info-left { text-align: left; flex: 1; }
+                            .company-name { font-weight: bold; font-size: 1.2em; }
+                        </style>
+                    </head>
+                    <body>${companyHeader}${table.outerHTML}</body>
+                </html>
+            `);
+            win.document.close();
+            win.print();
+            win.close();
+        }
+
+        function saveAsPDF(tableId) {
+            if (navigator.userAgent.includes('Android') && window.location.href.includes('appsgeyser')) {
+                alert('حفظ PDF غير مدعوم في تطبيق الأندرويد حاليًا. يرجى استخدام المتصفح على جهاز الكمبيوتر.');
+                return;
+            }
+            const element = document.getElementById(tableId);
+            const opt = {
+                margin: 1,
+                filename: `${tableId === 'log-table' ? 'سجل_العمليات' : 'تقرير'}.pdf`,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2, useCORS: true },
+                jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
+            };
+            html2pdf().from(element).set(opt).save();
+        }
+
+        function filterSalesReport() {
+            const station = document.getElementById('search-station').value;
+            const date = document.getElementById('search-date').value;
+            const formattedDate = date ? formatDate(new Date(date)) : '';
+            updateSalesTable(station, formattedDate);
+        }
+
+        function filterLogReport() {
+            const station = document.getElementById('log-search-station').value;
+            const dateFrom = document.getElementById('log-search-date-from').value;
+            const dateTo = document.getElementById('log-search-date-to').value;
+            updateLogTable(station, dateFrom, dateTo);
+        }
+
+        function clearLogSearch() {
+            document.getElementById('log-search-station').value = '';
+            document.getElementById('log-search-date-from').value = '';
+            document.getElementById('log-search-date-to').value = '';
+            updateLogTable();
+        }
+
+        function showAddInventory() {
+            document.getElementById('add-inventory').classList.remove('d-none');
+            document.getElementById('inventory-log').classList.add('d-none');
+            window.history.pushState({ page: 'add-inventory' }, '', '');
+        }
+
+        function showInventoryLog() {
+            document.getElementById('add-inventory').classList.add('d-none');
+            document.getElementById('inventory-log').classList.remove('d-none');
+            updateInventoryTable();
+            window.history.pushState({ page: 'inventory-log' }, '', '');
+        }
+
+        function backToInventory() {
+            document.getElementById('add-inventory').classList.add('d-none');
+            document.getElementById('inventory-log').classList.add('d-none');
+            document.getElementById('inventory').classList.remove('d-none');
+            window.history.pushState({ page: 'inventory' }, '', '');
+        }
+
+        function updateInventoryTable(filterDateFrom = '', filterDateTo = '') {
+            const tableBody = document.getElementById('inventory-table').querySelector('tbody');
+            tableBody.innerHTML = '';
+            let totalQuantity = 0;
+            let totalCost = 0;
+            let serialNumber = 1;
+            inventoryRecords.forEach((record, index) => {
+                const recordDate = record.date ? new Date(record.date) : null;
+                if (filterDateFrom && recordDate && recordDate < new Date(filterDateFrom)) return;
+                if (filterDateTo && recordDate && recordDate > new Date(filterDateTo)) return;
+                const dateStr = record.date ? formatDate(record.date) : '-';
+                const row = `
+                    <tr>
+                        <td>${serialNumber++}</td>
+                        <td>${record.item}</td>
+                        <td>${dateStr}</td>
+                        <td>${formatNumber(record.quantity)}</td>
+                        <td>${record.note || '-'}</td>
+                        <td>${formatNumber(record.cost)}</td>
+                        <td>${formatNumber(record.totalCost)}</td>
+                        <td class="no-print"><button class="btn btn-danger btn-sm" onclick="deleteInventoryRecord(${index})">حذف</button></td>
+                    </tr>`;
+                tableBody.innerHTML += row;
+                totalQuantity += record.quantity;
+                totalCost += record.totalCost;
+            });
+            document.getElementById('total-quantity').textContent = formatNumber(totalQuantity);
+            document.getElementById('total-cost').textContent = formatNumber(totalCost);
+        }
+
+        function filterInventoryLog() {
+            const dateFrom = document.getElementById('inventory-search-date-from').value;
+            const dateTo = document.getElementById('inventory-search-date-to').value;
+            updateInventoryTable(dateFrom, dateTo);
+        }
+
+        function clearInventorySearch() {
+            document.getElementById('inventory-search-date-from').value = '';
+            document.getElementById('inventory-search-date-to').value = '';
+            updateInventoryTable();
+        }
+
+        function updateTrailerTable(filterDateFrom = '', filterDateTo = '') {
+            const tableBody = document.getElementById('trailer-table').querySelector('tbody');
+            tableBody.innerHTML = '';
+            const trailers = [...new Set(inventoryRecords.map(r => r.item).filter(t => t))];
+            let totalDischargedAll = 0;
+            let totalSuppliedAll = 0;
+            let totalDifferenceAll = 0;
+            if (trailers.length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="5">لا توجد بيانات للمقطورات</td></tr>';
+            } else {
+                trailers.forEach(trailer => {
+                    const trailerStr = String(trailer).trim();
+                    const trailerRecords = inventoryRecords.filter(r => r.item === trailerStr && (!filterDateFrom || (r.date && r.date >= new Date(filterDateFrom))) && (!filterDateTo || (r.date && r.date <= new Date(filterDateTo))));
+                    if (trailerRecords.length === 0) return;
+                    const date = trailerRecords[0].date ? formatDate(trailerRecords[0].date) : '-';
+                    const supplied = trailerRecords.reduce((sum, r) => sum + (r.quantity || 0), 0);
+                    const trailerInvoices = invoices.filter(i => i.trailer === trailerStr && (!filterDateFrom || (i.date && i.date >= new Date(filterDateFrom))) && (!filterDateTo || (i.date && i.date <= new Date(filterDateTo))));
+                    const discharged = trailerInvoices.reduce((sum, i) => sum + (i.discharged || 0), 0);
+                    const difference = supplied - discharged;
+                    const differenceText = difference > 0 ? `عجز: ${formatNumber(difference)}` : difference < 0 ? `زيادة: ${formatNumber(Math.abs(difference))}` : 'متساوي';
+                    const row = `<tr onclick="showTrailerDetails('${trailerStr}')"><td>${trailerStr}</td><td>${date}</td><td>${formatNumber(discharged)}</td><td>${formatNumber(supplied)}</td><td>${differenceText}</td></tr>`;
+                    tableBody.innerHTML += row;
+                    totalDischargedAll += discharged;
+                    totalSuppliedAll += supplied;
+                    totalDifferenceAll += difference;
+                });
+            }
+            document.getElementById('total-discharged-trailer').textContent = formatNumber(totalDischargedAll);
+            document.getElementById('total-supplied').textContent = formatNumber(totalSuppliedAll);
+            document.getElementById('total-difference').textContent = totalDifferenceAll > 0 ? `عجز: ${formatNumber(totalDifferenceAll)}` : totalDifferenceAll < 0 ? `زيادة: ${formatNumber(Math.abs(totalDifferenceAll))}` : 'متساوي';
+        }
+
+        function filterTrailerReport() {
+            const dateFrom = document.getElementById('trailer-search-date-from').value;
+            const dateTo = document.getElementById('trailer-search-date-to').value;
+            updateTrailerTable(dateFrom, dateTo);
+        }
+
+        function clearTrailerSearch() {
+            document.getElementById('trailer-search-date-from').value = '';
+            document.getElementById('trailer-search-date-to').value = '';
+            updateTrailerTable();
+        }
+
+        function showTrailerDetails(trailer) {
+            document.getElementById('trailer-report').classList.add('d-none');
+            document.getElementById('trailer-details').classList.remove('d-none');
+            const tableBody = document.getElementById('trailer-details-table').querySelector('tbody');
+            tableBody.innerHTML = '';
+            const trailerStr = String(trailer).trim();
+            const trailerInvoices = invoices.filter(i => String(i.trailer).trim() === trailerStr);
+            let totalDischarged = 0;
+            if (trailerInvoices.length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="4">لا توجد تفاصيل لهذه المقطورة</td></tr>';
+            } else {
+                trailerInvoices.forEach(invoice => {
+                    const dateStr = invoice.date ? formatDate(invoice.date) : '-';
+                    const discharged = invoice.discharged || 0;
+                    const row = `<tr><td>${trailerStr}</td><td>${invoice.station}</td><td>${dateStr}</td><td>${formatNumber(discharged)}</td></tr>`;
+                    tableBody.innerHTML += row;
+                    totalDischarged += discharged;
+                });
+            }
+            document.getElementById('details-total-discharged').textContent = formatNumber(totalDischarged);
+        }
+
+        function backToTrailerReport() {
+            document.getElementById('trailer-details').classList.add('d-none');
+            document.getElementById('trailer-report').classList.remove('d-none');
+        }
+
+        function updateMonthlyTable() {
+            const tableBody = document.getElementById('monthly-table').querySelector('tbody');
+            tableBody.innerHTML = '';
+
+            const allDates = [
+                ...invoices.filter(i => i.date).map(i => i.date),
+                ...inventoryRecords.filter(r => r.date).map(r => r.date)
+            ];
+
+            if (allDates.length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="5">لا توجد بيانات</td></tr>';
+                return;
+            }
+
+            const monthsSet = new Set(allDates.map(d => `${d.getFullYear()}-${d.getMonth() + 1}`));
+            const months = Array.from(monthsSet).sort((a, b) => {
+                const [yA, mA] = a.split('-').map(Number);
+                const [yB, mB] = b.split('-').map(Number);
+                return yA - yB || mA - mB;
+            });
+
+            let totalSoldAll = 0;
+            let totalSuppliedAll = 0;
+            let totalRemainingAll = 0;
+            let totalProfitAll = 0;
+            const purchasePrice = 300;
+            const sellingPrice = 315;
+            let cumulativeSupplied = 0;
+            let cumulativeSold = 0;
+
+            months.forEach(month => {
+                const [year, monthNum] = month.split('-').map(Number);
+                const startDate = new Date(year, monthNum - 1, 1);
+                const endDate = new Date(year, monthNum, 0, 23, 59, 59);
+
+                const monthInvoices = invoices.filter(i => i.date && i.date >= startDate && i.date <= endDate);
+                const monthInventory = inventoryRecords.filter(r => r.date && r.date >= startDate && r.date <= endDate);
+
+                const sold = monthInvoices.reduce((sum, i) => sum + (i.discharged || 0), 0);
+                const supplied = monthInventory.reduce((sum, r) => sum + (r.quantity || 0), 0);
+
+                cumulativeSupplied += supplied;
+                cumulativeSold += sold;
+                const remaining = cumulativeSupplied - cumulativeSold;
+                const profit = sold * (sellingPrice - purchasePrice);
+
+                const row = `
+                    <tr>
+                        <td>${monthNum}/${year}</td>
+                        <td>${formatNumber(sold)}</td>
+                        <td>${formatNumber(supplied)}</td>
+                        <td>${formatNumber(remaining >= 0 ? remaining : 0)}</td>
+                        <td>${formatNumber(profit)}</td>
+                    </tr>`;
+                tableBody.innerHTML += row;
+
+                totalSoldAll += sold;
+                totalSuppliedAll += supplied;
+                totalRemainingAll = remaining >= 0 ? remaining : 0;
+                totalProfitAll += profit;
+            });
+
+            document.getElementById('total-monthly-sold').textContent = formatNumber(totalSoldAll);
+            document.getElementById('total-monthly-supplied').textContent = formatNumber(totalSuppliedAll);
+            document.getElementById('total-monthly-remaining').textContent = formatNumber(totalRemainingAll);
+            document.getElementById('total-monthly-profit').textContent = formatNumber(totalProfitAll);
+        }
+
+        function backToReports() {
+            document.getElementById('trailer-report').classList.add('d-none');
+            document.getElementById('reports').classList.remove('d-none');
+            backToMain();
+        }
+    </script>
+</body>
+</html>
